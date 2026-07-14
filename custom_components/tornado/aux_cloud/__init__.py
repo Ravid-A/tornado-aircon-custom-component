@@ -128,8 +128,15 @@ class AuxCloudAPI:
                     ttl_dns_cache=300,  # Cache DNS results for 5 minutes
                     use_dns_cache=True,
                     family=socket.AF_INET,
-                    keepalive_timeout=120,
-                    force_close=False,
+                    # AUX sits behind an AWS ELB whose idle timeout (~60s) is
+                    # shorter than the connector's old 120s keepalive, while the
+                    # coordinator polls every 60s. A pooled socket therefore sat
+                    # idle right across the ELB's cutoff, got silently dropped,
+                    # and the next poll reused the dead socket and hung on read
+                    # until sock_read fired. Open a fresh connection per request
+                    # instead. (keepalive_timeout must not be set with
+                    # force_close=True; aiohttp raises ValueError otherwise.)
+                    force_close=True,
                 )
                 _LOGGER.info("Created new connector: %s", id(cls._shared_connector))
 
